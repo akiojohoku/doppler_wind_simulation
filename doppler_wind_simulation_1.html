@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>風のある空間でのドップラー効果シミュレーター</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0efe9;
+      color: #3d3d3a;
+    }
+    @media (prefers-color-scheme: dark) {
+      html, body { background: #1a1a18; color: #c2c0b6; }
+    }
+    .app {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 12px 12px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    h1 {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .canvas-box {
+      border: 0.5px solid rgba(0,0,0,0.15);
+      border-radius: 10px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    @media (prefers-color-scheme: dark) {
+      .canvas-box { border-color: rgba(255,255,255,0.12); }
+    }
+    canvas { display: block; width: 100%; }
+    .legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 11px;
+      color: #73726c;
+      align-items: center;
+    }
+    @media (prefers-color-scheme: dark) { .legend { color: #888780; } }
+    .leg-item { display: flex; align-items: center; gap: 5px; }
+    .leg-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .leg-circle { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid; flex-shrink: 0; background: transparent; }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .ctrl-group {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.12);
+      border-radius: 8px;
+      padding: 9px 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .ctrl-group { background: #242422; border-color: rgba(255,255,255,0.1); }
+    }
+    .ctrl-label {
+      font-size: 11px;
+      color: #73726c;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    @media (prefers-color-scheme: dark) { .ctrl-label { color: #888780; } }
+    .ctrl-label span { color: #3d3d3a; font-weight: 500; font-size: 12px; }
+    @media (prefers-color-scheme: dark) { .ctrl-label span { color: #c2c0b6; } }
+    input[type=range] { width: 100%; accent-color: #185FA5; cursor: pointer; }
+    .tick-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #b4b2a9;
+      margin-top: 2px;
+    }
+    .btn-row { display: flex; gap: 8px; }
+    button {
+      padding: 7px 18px;
+      font-size: 13px;
+      border-radius: 8px;
+      border: 0.5px solid rgba(0,0,0,0.2);
+      background: #fff;
+      color: #3d3d3a;
+      cursor: pointer;
+    }
+    button:hover { background: #e8e6e0; }
+    @media (prefers-color-scheme: dark) {
+      button { background: #2c2c2a; border-color: rgba(255,255,255,0.15); color: #c2c0b6; }
+      button:hover { background: #3a3a38; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>風のある空間でのドップラー効果シミュレーター</h1>
+
+  <div class="canvas-box">
+    <canvas id="sim" width="640" height="360"></canvas>
+  </div>
+
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#993C1D"></div>音源S</div>
+    <div class="leg-item"><div class="leg-circle" style="border-color:#0F6E56"></div>波面</div>
+    <div class="leg-item">
+      <svg width="12" height="12" viewBox="0 0 12 12" style="flex-shrink:0">
+        <line x1="1" y1="6" x2="11" y2="6" stroke="#9F4A20" stroke-width="1.5"/>
+        <line x1="6" y1="1" x2="6" y2="11" stroke="#9F4A20" stroke-width="1.5"/>
+      </svg>波面の中心
+    </div>
+    <div class="leg-item">
+      <svg width="14" height="8" viewBox="0 0 14 8" style="flex-shrink:0">
+        <line x1="0" y1="4" x2="14" y2="4" stroke="#185FA5" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </svg>中心の軌跡
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl-group">
+      <div class="ctrl-label">音源速度 v <span id="lbl-vs">0.00</span> V</div>
+      <input type="range" id="sl-vs" min="0" max="2.0" step="0.05" value="0">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label">風速 U <span id="lbl-uw">0.00</span> V</div>
+      <input type="range" id="sl-uw" min="0" max="1.0" step="0.05" value="0">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label">基本振動数 f₀ <span id="lbl-f0">2.0</span></div>
+      <input type="range" id="sl-f0" min="0.5" max="4.0" step="0.5" value="2.0">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label">風向き <span id="lbl-angle">0°</span></div>
+      <input type="range" id="sl-angle" min="0" max="180" step="1" value="0">
+      <div class="tick-row"><span>0° (→)</span><span>90° (↑)</span><span>180° (←)</span></div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="btn-play" onclick="togglePlay()">一時停止</button>
+    <button onclick="resetSim()">リセット</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+let playing = true;
+const dt = 0.016;
+const V = 90;
+let vs = 0.0, uw = 0.0, windAngle = 0, f0 = 2.0;
+let srcX, srcY, obsX, obsY;
+const waves = [];
+let waveTimer = 0, t = 0;
+let arrivalInfo = null, arrivalFlash = 0;
+let lastArrivalSimTime = null, observedFreq = null;
+
+function init() { srcX = W*0.28; srcY = H*0.5; obsX = W*0.78; obsY = H*0.5; }
+function resetSim() {
+  waves.length=0; t=0; waveTimer=0;
+  arrivalInfo=null; arrivalFlash=0;
+  lastArrivalSimTime=null; observedFreq=null;
+  init();
+}
+function togglePlay() {
+  playing=!playing;
+  document.getElementById('btn-play').textContent=playing?'一時停止':'再生';
+}
+function getWind() {
+  const r=windAngle*Math.PI/180;
+  return {x:Math.cos(r)*uw*V, y:-Math.sin(r)*uw*V};
+}
+
+document.getElementById('sl-vs').addEventListener('input', e => { vs=parseFloat(e.target.value); document.getElementById('lbl-vs').textContent=vs.toFixed(2); });
+document.getElementById('sl-uw').addEventListener('input', e => { uw=parseFloat(e.target.value); document.getElementById('lbl-uw').textContent=uw.toFixed(2); resetSim(); });
+document.getElementById('sl-f0').addEventListener('input', e => { f0=parseFloat(e.target.value); document.getElementById('lbl-f0').textContent=f0.toFixed(1); resetSim(); });
+document.getElementById('sl-angle').addEventListener('input', e => {
+  windAngle=parseInt(e.target.value);
+  document.getElementById('lbl-angle').textContent=windAngle+'°';
+  resetSim();
+});
+
+function computeWaveSpeedX() {
+  const r=windAngle*Math.PI/180;
+  const Ux=Math.cos(r)*uw, Uy=Math.sin(r)*uw;
+  if (Uy*Uy > 1.0) return null;
+  return Math.sqrt(1-Uy*Uy)+Ux;
+}
+
+function shouldRemove(w) {
+  if (w.arrived) {
+    return w.r > Math.sqrt((obsX-w.cx)**2+(obsY-w.cy)**2)+200;
+  }
+  const dx=obsX-w.cx, dy=obsY-w.cy, dist=Math.sqrt(dx*dx+dy*dy);
+  const wind=getWind();
+  const wAlong=(wind.x*dx+wind.y*dy)/(dist+1e-9);
+  if (V+wAlong <= 0 && dist > w.r+10) return true;
+  return w.cx-w.r > W+100 && w.cy-w.r > H+100;
+}
+
+function update() {
+  const wind=getWind();
+  srcX+=vs*V*dt;
+  if (srcX>W*0.88) srcX=W*0.12;
+  waveTimer+=dt;
+  if (waveTimer>=1/f0) {
+    waveTimer-=1/f0;
+    waves.push({cx:srcX,cy:srcY,r:0,age:0,trail:[],arrived:false,emitX:srcX,emitY:srcY});
+  }
+  for (let w of waves) {
+    w.r+=V*dt; w.cx+=wind.x*dt; w.cy+=wind.y*dt; w.age+=dt;
+    if (Math.round(w.age/dt)%4===0) w.trail.push({x:w.cx,y:w.cy});
+    if (w.trail.length>200) w.trail.shift();
+    if (!w.arrived) {
+      const dx=obsX-w.cx, dy=obsY-w.cy, dist=Math.sqrt(dx*dx+dy*dy);
+      if (w.r>=dist && w.r-V*dt<dist) {
+        w.arrived=true;
+        if (lastArrivalSimTime!==null) {
+          const iv=t-lastArrivalSimTime;
+          if (iv>1e-6) observedFreq=1/iv;
+        }
+        lastArrivalSimTime=t;
+        arrivalInfo={vx:computeWaveSpeedX(),age:0};
+        arrivalFlash=0.4;
+      }
+    }
+  }
+  if (arrivalInfo) arrivalInfo.age+=dt;
+  if (arrivalFlash>0) arrivalFlash-=dt;
+  for (let i=waves.length-1;i>=0;i--) { if (shouldRemove(waves[i])) waves.splice(i,1); }
+  t+=dt;
+}
+
+function arrowHead(x1,y1,x2,y2,s) {
+  const dx=x2-x1,dy=y2-y1,l=Math.sqrt(dx*dx+dy*dy);
+  if(l<1) return;
+  const nx=dx/l,ny=dy/l,px=-ny,py=nx;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-nx*s+px*s*0.5,y2-ny*s+py*s*0.5);
+  ctx.lineTo(x2-nx*s-px*s*0.5,y2-ny*s-py*s*0.5);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawCross(x,y,sz,color) {
+  ctx.strokeStyle=color; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(x-sz,y); ctx.lineTo(x+sz,y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x,y-sz); ctx.lineTo(x,y+sz); ctx.stroke();
+}
+
+function isDark() { return window.matchMedia('(prefers-color-scheme: dark)').matches; }
+
+function draw() {
+  const dark=isDark(), wind=getWind();
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=dark?'#1a1a18':'#f0efe9'; ctx.fillRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle=dark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.06)'; ctx.lineWidth=0.5;
+  for(let x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // x-axis
+  ctx.strokeStyle=dark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.2)'; ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(20,H*0.5);ctx.lineTo(W-20,H*0.5);ctx.stroke();
+  ctx.fillStyle=dark?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.3)';
+  ctx.font='11px sans-serif';ctx.textAlign='left';ctx.fillText('x軸',W-32,H*0.5-5);
+
+  // Wind panel (top-left)
+  const pX=14,pY=10,pW=136,pH=106;
+  ctx.fillStyle=dark?'rgba(24,24,22,0.9)':'rgba(255,255,255,0.9)';
+  ctx.strokeStyle=dark?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.12)'; ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.roundRect(pX,pY,pW,pH,8);ctx.fill();ctx.stroke();
+  ctx.font='500 11px sans-serif';ctx.fillStyle=dark?'#5a9ed4':'#185FA5';
+  ctx.textAlign='left';ctx.fillText('風 (Wind)',pX+10,pY+17);
+  const ccx=pX+pW/2,ccy=pY+55,R=24;
+  ctx.strokeStyle=dark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)'; ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.arc(ccx,ccy,R,0,Math.PI*2);ctx.stroke();
+  [['→',0],['↑',90],['←',180]].forEach(([c,a])=>{
+    const rad=-a*Math.PI/180;
+    ctx.font='10px sans-serif';ctx.fillStyle=dark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.18)';
+    ctx.textAlign='center';ctx.fillText(c,ccx+Math.cos(rad)*(R+9),ccy-Math.sin(rad)*(R+9)+4);
+  });
+  const wMag=Math.sqrt(wind.x**2+wind.y**2);
+  if(wMag>0.5){
+    const wnx=wind.x/wMag,wny=wind.y/wMag,arL=R*0.85*uw;
+    ctx.strokeStyle=dark?'#5a9ed4':'#185FA5';ctx.fillStyle=dark?'#5a9ed4':'#185FA5'; ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(ccx,ccy);ctx.lineTo(ccx+wnx*arL,ccy+wny*arL);ctx.stroke();
+    arrowHead(ccx,ccy,ccx+wnx*arL,ccy+wny*arL,6);
+  }
+  ctx.font='11px sans-serif';ctx.fillStyle=dark?'#c2c0b6':'#333';
+  ctx.textAlign='center';ctx.fillText(`U=${uw.toFixed(2)}V  ${windAngle}°`,ccx,pY+pH-8);
+
+  // Velocity panel (top-right)
+  const p2X=W-14-154,p2Y=10,p2W=154,p2H=106;
+  ctx.fillStyle=dark?'rgba(24,24,22,0.9)':'rgba(255,255,255,0.9)';
+  ctx.strokeStyle=dark?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.12)'; ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.roundRect(p2X,p2Y,p2W,p2H,8);ctx.fill();ctx.stroke();
+  ctx.font='500 11px sans-serif';ctx.fillStyle=dark?'#c2c0b6':'#333';
+  ctx.textAlign='left';ctx.fillText('速度',p2X+10,p2Y+17);
+  ctx.font='11px sans-serif';ctx.fillStyle=dark?'#e8593c':'#993C1D';
+  ctx.fillText('音源 S',p2X+10,p2Y+36);
+  ctx.font='500 13px sans-serif';ctx.textAlign='right';ctx.fillStyle=dark?'#e8593c':'#993C1D';
+  ctx.fillText(`v = ${vs.toFixed(2)} V`,p2X+p2W-10,p2Y+36);
+  ctx.fillStyle=dark?'rgba(232,89,60,0.15)':'rgba(153,60,29,0.1)';
+  ctx.beginPath();ctx.roundRect(p2X+10,p2Y+42,p2W-20,4,2);ctx.fill();
+  if(vs>0){ctx.fillStyle=dark?'#e8593c':'#993C1D';ctx.beginPath();ctx.roundRect(p2X+10,p2Y+42,(p2W-20)*vs/2.0,4,2);ctx.fill();}
+  ctx.font='11px sans-serif';ctx.fillStyle=dark?'#c2c0b6':'#444';
+  ctx.textAlign='left';ctx.fillText('観測者 O',p2X+10,p2Y+62);
+  ctx.font='500 13px sans-serif';ctx.textAlign='right';ctx.fillStyle=dark?'#888':'#888';
+  ctx.fillText('静止中',p2X+p2W-10,p2Y+62);
+  ctx.fillStyle=dark?'rgba(194,192,182,0.1)':'rgba(0,0,0,0.07)';
+  ctx.beginPath();ctx.roundRect(p2X+10,p2Y+68,p2W-20,4,2);ctx.fill();
+  ctx.font='11px sans-serif';ctx.fillStyle=dark?'#5a9ed4':'#185FA5';
+  ctx.textAlign='left';ctx.fillText('風 U',p2X+10,p2Y+88);
+  ctx.font='500 13px sans-serif';ctx.textAlign='right';ctx.fillStyle=dark?'#5a9ed4':'#185FA5';
+  ctx.fillText(`${uw.toFixed(2)} V`,p2X+p2W-10,p2Y+88);
+
+  // Arrival info panel (bottom-right)
+  const apX=W-14-154,apY=H-14-106,apW=154,apH=106;
+  const hasInfo=arrivalInfo!==null;
+  ctx.fillStyle=dark?'rgba(24,24,22,0.9)':'rgba(255,255,255,0.9)';
+  ctx.strokeStyle=hasInfo?(dark?'rgba(147,53,168,0.6)':'rgba(120,40,140,0.4)'):(dark?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.12)');
+  ctx.lineWidth=hasInfo?1:0.5;
+  ctx.beginPath();ctx.roundRect(apX,apY,apW,apH,8);ctx.fill();ctx.stroke();
+  ctx.font='500 11px sans-serif';ctx.fillStyle=dark?'#c084d4':'#7B2D8B';
+  ctx.textAlign='left';ctx.fillText('観測者への到達',apX+10,apY+17);
+  if(!hasInfo){
+    ctx.font='11px sans-serif';ctx.fillStyle=dark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.25)';
+    ctx.textAlign='center';ctx.fillText('波面待機中...',apX+apW/2,apY+apH/2+4);
+  } else {
+    const vx=arrivalInfo.vx!==null?arrivalInfo.vx:0;
+    ctx.font='11px sans-serif';ctx.fillStyle=dark?'#c084d4':'#7B2D8B';
+    ctx.textAlign='left';ctx.fillText('波面速度 x成分',apX+10,apY+37);
+    ctx.font='500 14px sans-serif';ctx.fillStyle=dark?'#d8a8e8':'#5C1A72';
+    ctx.textAlign='right';ctx.fillText(`${vx>=0?'+':''}${vx.toFixed(3)} V`,apX+apW-10,apY+37);
+    ctx.strokeStyle=dark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)'; ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(apX+10,apY+50);ctx.lineTo(apX+apW-10,apY+50);ctx.stroke();
+    ctx.font='11px sans-serif';ctx.fillStyle=dark?'#c084d4':'#7B2D8B';
+    ctx.textAlign='left';ctx.fillText('観測振動数 f',apX+10,apY+66);
+    if(observedFreq!==null){
+      const ratio=observedFreq/f0;
+      ctx.font='500 14px sans-serif';ctx.fillStyle=dark?'#d8a8e8':'#5C1A72';
+      ctx.textAlign='right';ctx.fillText(`${observedFreq.toFixed(3)} f₀`,apX+apW-10,apY+66);
+      const bW=apW-20,bCx=apX+10+bW/2;
+      ctx.fillStyle=dark?'rgba(147,53,168,0.15)':'rgba(120,40,140,0.1)';
+      ctx.beginPath();ctx.roundRect(apX+10,apY+74,bW,4,2);ctx.fill();
+      ctx.strokeStyle=dark?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.25)'; ctx.lineWidth=0.5;
+      ctx.beginPath();ctx.moveTo(bCx,apY+72);ctx.lineTo(bCx,apY+80);ctx.stroke();
+      const fw=Math.min(bW/2,Math.abs(ratio-1.0)/2.0*bW/2);
+      ctx.fillStyle=ratio>1?(dark?'#c084d4':'#7B2D8B'):(dark?'#5a9ed4':'#185FA5');
+      if(ratio>=1){ctx.beginPath();ctx.roundRect(bCx,apY+74,fw,4,2);ctx.fill();}
+      else{ctx.beginPath();ctx.roundRect(bCx-fw,apY+74,fw,4,2);ctx.fill();}
+      ctx.font='10px sans-serif';ctx.fillStyle=dark?'rgba(200,160,220,0.7)':'rgba(100,40,120,0.6)';
+      ctx.textAlign='center';
+      ctx.fillText(`${ratio>=1?'+':''}${((ratio-1)*100).toFixed(1)}% vs f₀`,apX+apW/2,apY+92);
+    } else {
+      ctx.font='11px sans-serif';ctx.fillStyle=dark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.25)';
+      ctx.textAlign='center';ctx.fillText('次の波面を待機中...',apX+apW/2,apY+70);
+    }
+  }
+
+  // Wavefronts
+  for(let w of waves){
+    const alpha=Math.max(0,0.7-w.age*0.1);
+    if(w.trail.length>1){
+      ctx.setLineDash([3,3]);
+      ctx.strokeStyle=dark?`rgba(90,158,212,${alpha*0.6})`:`rgba(24,95,165,${alpha*0.6})`; ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(w.trail[0].x,w.trail[0].y);
+      for(let i=1;i<w.trail.length;i++) ctx.lineTo(w.trail[i].x,w.trail[i].y);
+      ctx.stroke();ctx.setLineDash([]);
+    }
+    ctx.beginPath();ctx.arc(w.cx,w.cy,w.r,0,Math.PI*2);
+    ctx.strokeStyle=dark?`rgba(90,190,150,${Math.max(0.05,alpha)})`:`rgba(15,110,86,${Math.max(0.05,alpha)})`; ctx.lineWidth=1.5; ctx.stroke();
+    const ca=Math.min(1,alpha*1.4);
+    const cc=dark?`rgba(232,120,80,${Math.max(0.05,ca)})`:`rgba(159,74,32,${Math.max(0.05,ca)})`;
+    drawCross(w.cx,w.cy,5,cc);
+    ctx.beginPath();ctx.arc(w.cx,w.cy,2,0,Math.PI*2);ctx.fillStyle=cc;ctx.fill();
+    if(w===waves[waves.length-1]&&w.r>10){
+      ctx.font='9px sans-serif';ctx.fillStyle=dark?'rgba(232,120,80,0.8)':'rgba(159,74,32,0.8)';
+      ctx.textAlign='left';ctx.fillText('波面中心',w.cx+7,w.cy-5);
+    }
+  }
+
+  // Observer flash
+  if(arrivalFlash>0){
+    const fa=arrivalFlash/0.4;
+    ctx.beginPath();ctx.arc(obsX,obsY,14+10*(1-fa),0,Math.PI*2);
+    ctx.strokeStyle=dark?`rgba(192,132,212,${fa*0.8})`:`rgba(123,45,139,${fa*0.7})`; ctx.lineWidth=2; ctx.stroke();
+  }
+
+  // Observer
+  ctx.beginPath();ctx.arc(obsX,obsY,11,0,Math.PI*2);
+  ctx.fillStyle=dark?'#3a3a38':'#e8e6e0';ctx.fill();
+  ctx.strokeStyle=dark?'#c2c0b6':'#444';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.font='500 10px sans-serif';ctx.fillStyle=dark?'#c2c0b6':'#444';
+  ctx.textAlign='center';ctx.fillText('O',obsX,obsY+4);
+  ctx.font='11px sans-serif';ctx.fillStyle=dark?'#c2c0b6':'#555';
+  ctx.fillText('観測者O',obsX,obsY+22);
+  ctx.font='10px sans-serif';ctx.fillStyle=dark?'#666':'#999';
+  ctx.fillText('静止中',obsX,obsY+33);
+
+  // Source
+  ctx.beginPath();ctx.arc(srcX,srcY,11,0,Math.PI*2);
+  ctx.fillStyle=dark?'#4a1a0e':'#fde8e1';ctx.fill();
+  ctx.strokeStyle=dark?'#e8593c':'#993C1D';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.font='500 10px sans-serif';ctx.fillStyle=dark?'#e8593c':'#993C1D';
+  ctx.textAlign='center';ctx.fillText('S',srcX,srcY+4);
+  ctx.font='11px sans-serif';ctx.fillStyle=dark?'#e8593c':'#993C1D';
+  ctx.fillText('音源S',srcX,srcY-18);
+  if(vs>0.01){
+    const arL=12+vs*28;
+    ctx.strokeStyle=dark?'#e8593c':'#993C1D';ctx.fillStyle=dark?'#e8593c':'#993C1D'; ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(srcX+12,srcY);ctx.lineTo(srcX+12+arL,srcY);ctx.stroke();
+    arrowHead(srcX+12,srcY,srcX+12+arL,srcY,6);
+  }
+
+  // Wind vector (bottom-center)
+  const wvCx=W*0.5,wvCy=H-28;
+  if(wMag>0.5){
+    const wnx=wind.x/wMag,wny=wind.y/wMag,arL=28+uw*70;
+    ctx.strokeStyle=dark?'#5a9ed4':'#185FA5';ctx.fillStyle=dark?'#5a9ed4':'#185FA5'; ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(wvCx-wnx*arL*0.5,wvCy-wny*arL*0.5);ctx.lineTo(wvCx+wnx*arL*0.5,wvCy+wny*arL*0.5);ctx.stroke();
+    arrowHead(wvCx-wnx*arL*0.5,wvCy-wny*arL*0.5,wvCx+wnx*arL*0.5,wvCy+wny*arL*0.5,7);
+    ctx.font='500 11px sans-serif';ctx.fillStyle=dark?'#5a9ed4':'#185FA5';ctx.textAlign='center';
+    ctx.fillText(`U=${uw.toFixed(2)}V  ${windAngle}°`,wvCx+wnx*arL*0.5+wnx*26,wvCy+wny*arL*0.5+wny*13+4);
+    ctx.font='10px sans-serif';ctx.fillStyle=dark?'rgba(90,158,212,0.5)':'rgba(24,95,165,0.45)';
+    ctx.fillText('風',wvCx-wnx*arL*0.5-wnx*14,wvCy-wny*arL*0.5-wny*14+4);
+  }
+}
+
+function loop(){ if(playing) update(); draw(); requestAnimationFrame(loop); }
+init(); resetSim(); loop();
+</script>
+</body>
+</html>
